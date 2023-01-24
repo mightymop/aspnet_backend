@@ -1,6 +1,7 @@
-﻿{
-  "api": { 
-    "version": "v1",        //Version der API
+<pre>
+ {
+  "api": {   
+    "version": "v1",        //Version der API    
     "name": "Backend API"   //Name der API
   },
   "IpRateLimiting": {
@@ -28,3 +29,4 @@
     "authority": "https://localhost:44311/" //URL/Referer unter welcher die ClientApp im Browser läuft...
   }
 }
+<pre>
