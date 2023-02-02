@@ -1,6 +1,5 @@
 using log4net.Config;
 using Microsoft.IdentityModel.Logging;
-using System.Configuration;
 using Utils.Other;
 using ConfigurationManager = Microsoft.Extensions.Configuration.ConfigurationManager;
 

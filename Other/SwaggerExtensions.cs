@@ -21,7 +21,7 @@ namespace Utils.Other
             app.UseSwaggerUI(c =>
             {
                 string swaggerJsonBasePath = string.IsNullOrWhiteSpace(c.RoutePrefix) ? "." : "..";
-                c.SwaggerEndpoint($"{swaggerJsonBasePath}/swagger/v1/swagger.json", cfgmgr["api:name"] + " " + cfgmgr["api:version"]);
+                c.SwaggerEndpoint($"{swaggerJsonBasePath}/swagger/"+ cfgmgr["api:version"] + "/swagger.json", cfgmgr["api:name"] + " " + cfgmgr["api:version"]);
 
                 //oauth2
 
