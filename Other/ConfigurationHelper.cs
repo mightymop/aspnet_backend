@@ -1,12 +1,16 @@
 ﻿using AspNetCoreRateLimit;
+using log4net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
+using System.Net;
 
 namespace Utils.Other
 {
     public static class ConfigurationHelper
     {
+        private static ILog log = LogManager.GetLogger(typeof(ConfigurationHelper));
+
         private static void configureCors(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
         {
             /*
@@ -68,37 +72,67 @@ namespace Utils.Other
             })
             .AddJwtBearer(x =>
             {
-                x.MetadataAddress = cfgmgr["auth:metadata"]; //.../.well-known/openid-configuration URL aus config ... Die Datei enthält Infos für die Auth. der Token
-
-                x.Audience = cfgmgr["auth:clientid"]; // microsoft:identityserver:<CLIENT ID FÜR APP IM ADFS>
-                x.Authority = cfgmgr["auth:authority"]; // Url / Referer unter dem der Client läuft
-
-                // UM SSL Zertifikatstest der Backends untereinander zu deaktivieren... sonst müsste man hier valide SSL Zertifikate installieren etc...
-                HttpClientHandler handler = new HttpClientHandler();
-                handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-                x.BackchannelHttpHandler = handler;
-
-                //Einstellung welche Dinge im Token geprüft werden:
-                x.TokenValidationParameters = new TokenValidationParameters
+                string metadataurl = cfgmgr["auth:metadata"];
+                if (IsWebPageAvailable(metadataurl))
                 {
-                    ValidAudience = cfgmgr["auth:audience"],
+                    x.MetadataAddress = cfgmgr["auth:metadata"]; //.../.well-known/openid-configuration URL aus config ... Die Datei enthält Infos für die Auth. der Token
 
-                    ValidIssuer = cfgmgr["auth:trusturl"],
-                    ValidateLifetime = true,
+                    x.Audience = cfgmgr["auth:clientid"]; // microsoft:identityserver:<CLIENT ID FÜR APP IM ADFS>
+                    x.Authority = cfgmgr["auth:authority"]; // Url / Referer unter dem der Client läuft
 
-                    RequireExpirationTime = true,
-                    RequireSignedTokens = true,
-                    RequireAudience = true,
-                    SaveSigninToken = true,
-                    TryAllIssuerSigningKeys = true,
-                    ValidateActor = false,
-                    ValidateAudience = true,
-                    ValidateIssuer = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidateTokenReplay = false
-                };
+                    // UM SSL Zertifikatstest der Backends untereinander zu deaktivieren... sonst müsste man hier valide SSL Zertifikate installieren etc...
+                    HttpClientHandler handler = new HttpClientHandler();
+                    handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                    x.BackchannelHttpHandler = handler;
+
+                    //Einstellung welche Dinge im Token geprüft werden:
+                    x.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidAudience = cfgmgr["auth:audience"],
+
+                        ValidIssuer = cfgmgr["auth:trusturl"],
+                        ValidateLifetime = true,
+
+                        RequireExpirationTime = true,
+                        RequireSignedTokens = true,
+                        RequireAudience = true,
+                        SaveSigninToken = true,
+                        TryAllIssuerSigningKeys = true,
+                        ValidateActor = false,
+                        ValidateAudience = true,
+                        ValidateIssuer = true,
+                        ValidateIssuerSigningKey = true,
+                        ValidateTokenReplay = false
+                    };
+                }
+                else
+                {
+                    log.Error("Die OpenID Connect Metadaten konnten nicht geladen werden, Token können nicht validiert werden. (URL: " + metadataurl + ")");
+                }
+
+               
             })
             .AddCookie();
+        }
+
+        public static bool IsWebPageAvailable(string url)
+        {
+            try
+            {
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+                request.Method = "HEAD";
+                request.Timeout = 5000;
+                request.AllowAutoRedirect = false;
+
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                {
+                    return response.StatusCode == HttpStatusCode.OK;
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         public static void configureRateLimit(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
@@ -146,6 +180,9 @@ namespace Utils.Other
     public class IsEnabledRequirement : IAuthorizationRequirement
     {
     }
+
+    
+
 
     /*
        Dient der Möglichkeit die Authorisierung per Konfigurationsdatei zu (de-)aktivieren.
