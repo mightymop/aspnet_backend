@@ -8,7 +8,7 @@ namespace aspauthtest.Controllers
 {
     [ApiController]
     [Route("[controller]")]
- 
+
     public class BackendController : ControllerBase
     {
         private ILog log = LogManager.GetLogger(typeof(BackendController));
@@ -19,8 +19,8 @@ namespace aspauthtest.Controllers
             log.Debug("Initialisiere Controller");
             this._configuration = configuration;
         }
-       
-        [HttpGet("/test/info")]   
+
+        [HttpGet("/test/info")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         public ActionResult<ApiInfo> info()
         {

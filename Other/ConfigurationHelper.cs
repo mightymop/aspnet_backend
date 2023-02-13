@@ -2,6 +2,7 @@
 using log4net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Net;
 
@@ -69,9 +70,37 @@ namespace Utils.Other
             builder.Services.AddAuthentication(sharedOptions =>
             {
                 sharedOptions.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+                sharedOptions.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                sharedOptions.DefaultSignInScheme = JwtBearerDefaults.AuthenticationScheme;
+                sharedOptions.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
             })
             .AddJwtBearer(x =>
             {
+                x.Events = new JwtBearerEvents()
+                {
+                    OnAuthenticationFailed = (context) =>
+                    {                       
+                        log.Error("Authentication failed.", context.Exception);
+                        return Task.CompletedTask;
+                    },
+                    /*    OnMessageReceived = context =>
+                        {
+                            log.Warn("OnChallenge: " + context.Request + " " + context.Response);
+
+                            return base.OnMessageReceived(context);
+                        },
+                    OnChallenge = context =>
+                     {
+                         log.Warn("OnChallenge: " + context.Error + " " + context.ErrorDescription);
+                         return Task.CompletedTask;
+                     },*/
+                    OnForbidden = context =>
+                    {
+                        log.Error("OnForbidden: " + context.Request + " " + context.Response);
+                        return Task.CompletedTask;
+                    }
+                };
+
                 string metadataurl = cfgmgr["auth:metadata"];
                 if (IsWebPageAvailable(metadataurl))
                 {
@@ -79,7 +108,7 @@ namespace Utils.Other
 
                     x.Audience = cfgmgr["auth:clientid"]; // microsoft:identityserver:<CLIENT ID FÜR APP IM ADFS>
                     x.Authority = cfgmgr["auth:authority"]; // Url / Referer unter dem der Client läuft
-
+                    
                     // UM SSL Zertifikatstest der Backends untereinander zu deaktivieren... sonst müsste man hier valide SSL Zertifikate installieren etc...
                     HttpClientHandler handler = new HttpClientHandler();
                     handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
@@ -98,10 +127,10 @@ namespace Utils.Other
                         RequireAudience = true,
                         SaveSigninToken = true,
                         TryAllIssuerSigningKeys = true,
-                        ValidateActor = false,
+                        ValidateActor = true,
                         ValidateAudience = true,
                         ValidateIssuer = true,
-                        ValidateIssuerSigningKey = true,
+                        ValidateIssuerSigningKey = false,
                         ValidateTokenReplay = false
                     };
                 }
@@ -120,17 +149,19 @@ namespace Utils.Other
             try
             {
                 HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-                request.Method = "HEAD";
+                request.Method = "GET";
                 request.Timeout = 5000;
-                request.AllowAutoRedirect = false;
+                request.AllowAutoRedirect = true;
+                request.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
 
                 using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
                 {
                     return response.StatusCode == HttpStatusCode.OK;
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                log.Error("IsWebPageAvailable() url: " + url, e);
                 return false;
             }
         }
@@ -153,6 +184,11 @@ namespace Utils.Other
             configureAuthorization(builder, cfgmgr);
             configureRateLimit(builder, cfgmgr);
 
+            builder.Services.AddDistributedMemoryCache();
+            builder.Services.AddSession(options => {
+                options.IdleTimeout = TimeSpan.FromMinutes(1);
+            });
+
             //builder.Services.AddControllers();
             builder.Services.AddControllersWithViews().AddXmlSerializerFormatters();
             builder.Services.AddEndpointsApiExplorer();
@@ -161,13 +197,14 @@ namespace Utils.Other
 
         public static void configureApp(WebApplication app)
         {
+         
             app.UseMiddleware<CustomIpRateLimitMiddleware>();
             app.UseDeveloperExceptionPage();
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseRouting();
             app.UseCookiePolicy();
-
+            app.UseSession();
             app.UseAuthorization();
             app.UseAuthentication();
             app.UseCors();
