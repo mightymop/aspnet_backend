@@ -119,12 +119,13 @@ namespace Utils.Other
                     {
                         ValidAudience = cfgmgr["auth:audience"],
 
-                        ValidateLifetime = false,
-                        ValidateIssuer = false,
+                        ValidateLifetime = true,
                         RequireExpirationTime = true,
+                        ClockSkew = TimeSpan.FromMinutes(2),
+                        ValidateIssuer = false,
                         RequireSignedTokens = Convert.ToBoolean(cfgmgr["auth:validate_sign"]),
                         RequireAudience = Convert.ToBoolean(cfgmgr["auth:validate_audience"]),
-                        SaveSigninToken = true,
+                        // SaveSigninToken = true,
                         TryAllIssuerSigningKeys = Convert.ToBoolean(cfgmgr["auth:validate_sign"]),
                         ValidateActor = false,
                         ValidateAudience = Convert.ToBoolean(cfgmgr["auth:validate_audience"]),
