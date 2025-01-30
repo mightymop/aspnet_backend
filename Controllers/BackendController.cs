@@ -53,7 +53,7 @@ namespace aspauthtest.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Produces("application/json")]
         [EnableCors]
-        public ActionResult<ApiInfo> get(string id)
+        public IActionResult get(string id)
         {
             try
             {
@@ -95,7 +95,7 @@ namespace aspauthtest.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Produces("application/json")]
-        public async Task<IActionResult> insert([FromBody] JsonElement jdata)
+        public IActionResult insert([FromBody] JsonElement jdata)
         {
             try
             {
@@ -139,7 +139,7 @@ namespace aspauthtest.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Produces("application/json")]
-        public async Task<IActionResult> update(TestModel req)
+        public IActionResult update(TestModel req)
         {
             try
             {
@@ -172,7 +172,7 @@ namespace aspauthtest.Controllers
         [EnableCors]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> delete(string id)
+        public IActionResult delete(string id)
         {
             try
             {
