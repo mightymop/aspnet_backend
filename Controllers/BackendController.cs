@@ -139,24 +139,13 @@ namespace aspauthtest.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [Produces("application/json")]
-        public async Task<IActionResult> update([FromBody] JsonElement jdata)
+        public async Task<IActionResult> update(TestModel req)
         {
             try
             {
-                // JSON in einen String serialisieren
-                string requestString = jdata.GetRawText();
-
                 string error;
-                string result = null;
 
-                log.Debug(requestString);
-
-                JObject jrequest = JObject.Parse(requestString);
-
-                string id = (string) jrequest["id"];
-                string data = (string)jrequest["data"];
-
-                if (_db.insertOrUpdateData(id, data, out error))
+                if (_db.insertOrUpdateData(req.id, req.data, out error))
                 {
                     return Ok("Daten aktualisiert");
                 }
