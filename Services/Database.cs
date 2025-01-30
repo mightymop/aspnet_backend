@@ -112,12 +112,13 @@ namespace fahrtenbuch_service.Services
                 {
                     using (SqlConnection connection = openConnection())
                     {
-                        string sql = "SELECT tab_data.id, tab_data.data FROM " + this._config.getSQLDatabaseWrite() + " .dbo.tab_data WHERE id=@id;";
+                        string sql = "SELECT tab_data.id, tab_data.data FROM " + this._config.getSQLDatabaseWrite() + ".dbo.tab_data WHERE id=@id";
 
                         log.Info(sql);
 
                         using (SqlCommand cmd = new SqlCommand(sql, connection))
                         {
+                            log.Debug("ADD PARAM ID: " + id);
                             cmd.Parameters.Add("@id", SqlDbType.VarChar, id.Length).Value = id;
 
                             object result = null;
@@ -154,7 +155,7 @@ namespace fahrtenbuch_service.Services
             }
         }
 
-        public bool insertOrUpdateData(string id, string data, out string error)
+        public string insertOrUpdateData(string id, string data, out string error)
         {
 
             try
@@ -163,6 +164,12 @@ namespace fahrtenbuch_service.Services
                 {
                     using (SqlConnection connection = openConnection())
                     {
+                        if (id==null)
+                        {
+                            id = Guid.NewGuid().ToString();
+                        }
+
+
                         string sql = "BEGIN TRAN" +
                                    " SET DATEFORMAT ymd;" +
                                    " if exists(SELECT * FROM " + this._config.getSQLDatabaseWrite() + ".dbo.tab_data WHERE id=@uuid)" +
@@ -196,21 +203,36 @@ namespace fahrtenbuch_service.Services
 
                             bool result = (executeInsertUpdateQuery(cmd, 1, 3) == 1 ? true : false);
                             connection.Close();
-                            return result;
+                            if (result)
+                            {
+                                return id;
+                            }
+                            else
+                            {
+                                return null;
+                            }
                         }
 
                     }
                 };
 
                 error = null;
+                string result;
                 if (_config.isSql_Windows_Auth_Write())
                 {
-                    return WindowsIdentity.RunImpersonated(getUserHandle(false), fkt);
+                    result = WindowsIdentity.RunImpersonated(getUserHandle(false), fkt);
+                    
                 }
                 else
                 {
-                    return fkt();
+                    result = fkt();
                 }
+
+                if (result == null)
+                {
+                    error = "Fehler beim Insert!";
+                }
+                return result;
             }
             catch (Exception e)
             {
@@ -218,7 +240,7 @@ namespace fahrtenbuch_service.Services
                 string classname = this.GetType().BaseType!.Name;
                 log.Error(classname + "." + method + ": " + e.Message + " DATA: " + data, e);
                 error = e.Message;
-                return false;
+                return null;
             }
         }
 

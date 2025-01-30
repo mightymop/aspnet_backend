@@ -17,16 +17,14 @@ namespace aspauthtest.Controllers
     public class BackendController : ControllerBase
     {
         private ILog log = LogManager.GetLogger(typeof(BackendController));
-        ConfigurationManager _configuration;
 
         protected ConfigService _config;
 
         protected DatabaseService _db;
 
-        public BackendController(ConfigurationManager configuration, ConfigService configService, DatabaseService db)
+        public BackendController( ConfigService configService, DatabaseService db)
         {
             log.Debug("Initialisiere Controller");
-            this._configuration = configuration;
 
             this._config = configService;
 
@@ -40,8 +38,8 @@ namespace aspauthtest.Controllers
         public ActionResult<ApiInfo> info()
         {
             ApiInfo apiInfo = new ApiInfo();
-            apiInfo.Name = this._configuration["api:name"];
-            apiInfo.Version = this._configuration["api:version"];
+            apiInfo.Name = this._config.get("api:name");
+            apiInfo.Version = this._config.get("api:version");
             apiInfo.Date = DateTime.Now;
             return Ok(apiInfo);
         }
@@ -58,9 +56,10 @@ namespace aspauthtest.Controllers
             try
             {
                 string error;
+                log.Debug("get: " + id);
                 object data = _db.getData(id, out error);
 
-                if (data!=null && error !=null)
+                if (data!=null && error ==null)
                 {
                     return Ok(data);
                 }
@@ -89,7 +88,7 @@ namespace aspauthtest.Controllers
             }
         }
 
-        [HttpPatch("/test/insert")]
+        [HttpPost("/test/insert")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [EnableCors]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -111,9 +110,10 @@ namespace aspauthtest.Controllers
                
                 string data = (string)jrequest["data"];
 
-                if (_db.insertOrUpdateData(null, data, out error))
+                string idResult;
+                if ((idResult=_db.insertOrUpdateData(null, data, out error))!=null)
                 {
-                    return Ok("Daten eingefügt");
+                    return Ok(idResult);
                 }
                 else
                 {
@@ -145,10 +145,11 @@ namespace aspauthtest.Controllers
             {
                 string error;
 
-                if (_db.insertOrUpdateData(req.id, req.data, out error))
+                string idResult;
+                if ((idResult = _db.insertOrUpdateData(req.id, req.data, out error)) != null)
                 {
-                    return Ok("Daten aktualisiert");
-                }
+                    return Ok(idResult);
+                }               
                 else
                 {
                     return Problem(
