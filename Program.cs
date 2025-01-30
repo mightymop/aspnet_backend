@@ -1,3 +1,4 @@
+using fahrtenbuch_service.Services;
 using log4net.Config;
 using Microsoft.IdentityModel.Logging;
 using Utils.Other;
@@ -9,13 +10,11 @@ XmlConfigurator.Configure(new FileInfo("log4net.config"));
 
 var builder = WebApplication.CreateBuilder(args);
 ConfigurationManager cfgmgr = builder.Configuration;
-//Für Zugriff in Controller
-builder.Services.AddSingleton<ConfigurationManager>(cfgmgr);
-
+ConfigService config = new ConfigService(cfgmgr);
 IdentityModelEventSource.ShowPII = true;
 
 SwaggerExtensions.ConfigureSwaggerBuilder(builder, cfgmgr);
-ConfigurationHelper.configureBuilder(builder, cfgmgr);
+ConfigurationHelper.configureBuilder(builder, cfgmgr, config);
 
 var app = builder.Build();
 

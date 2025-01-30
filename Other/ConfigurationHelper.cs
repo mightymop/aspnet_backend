@@ -2,27 +2,22 @@
 using log4net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using System.Net;
+using fahrtenbuch_service.Other;
+using fahrtenbuch_service.Services;
 
 namespace Utils.Other
 {
     public static class ConfigurationHelper
     {
         private static ILog log = LogManager.GetLogger(typeof(ConfigurationHelper));
-
         private static void configureCors(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
         {
-            /*
-                Hier wird Cors konfiguriert. Zugriff von Clients auf andere Server als derer woher der Clientcode geladen wurde.
-                Sonst brechen die Browser ab.
-             */
             builder.Services.AddCors(options =>
             {
                 options.AddDefaultPolicy(policy =>
                 {
-                    policy.WithOrigins("*", "https://localhost/", cfgmgr["auth:authority"]);
+                    policy.WithOrigins("*", "https://localhost/");
                     policy.SetIsOriginAllowed(origin => true);
                     policy.AllowAnyOrigin();
                     policy.AllowAnyHeader();
@@ -36,17 +31,9 @@ namespace Utils.Other
 
         private static void configureAuthorization(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
         {
-            //Authhandler als Service starten.
             builder.Services.AddSingleton<IAuthorizationHandler>(o => new CustomAuthHandler(cfgmgr["auth:enabled"] != null ? !cfgmgr["auth:enabled"].Equals("true") : true));
 
             builder.Services.Configure<IISOptions>(iis =>
-            {
-                iis.AuthenticationDisplayName = "Windows";
-                iis.AutomaticAuthentication = false;
-            });
-
-            // configures IIS in-proc settings
-            builder.Services.Configure<IISServerOptions>(iis =>
             {
                 iis.AuthenticationDisplayName = "Windows";
                 iis.AutomaticAuthentication = false;
@@ -59,14 +46,15 @@ namespace Utils.Other
                 options.MinimumSameSitePolicy = SameSiteMode.None;
             });
 
+           
             builder.Services.AddAuthorization(options =>
             {
-                options.AddPolicy("CustomAuth", policy => {
+                options.AddPolicy("CustomAuth", policy =>
+                {
                     policy.AddRequirements(new IsEnabledRequirement());
                 });
             });
-            
-            //Prüfung der Token von Client beim Zugriff auf die API-Endpunkte
+
             builder.Services.AddAuthentication(sharedOptions =>
             {
                 sharedOptions.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -79,21 +67,10 @@ namespace Utils.Other
                 x.Events = new JwtBearerEvents()
                 {
                     OnAuthenticationFailed = (context) =>
-                    {                       
+                    {
                         log.Error("Authentication failed.", context.Exception);
                         return Task.CompletedTask;
                     },
-                    /*    OnMessageReceived = context =>
-                        {
-                            log.Warn("OnChallenge: " + context.Request + " " + context.Response);
-
-                            return base.OnMessageReceived(context);
-                        },
-                    OnChallenge = context =>
-                     {
-                         log.Warn("OnChallenge: " + context.Error + " " + context.ErrorDescription);
-                         return Task.CompletedTask;
-                     },*/
                     OnForbidden = context =>
                     {
                         log.Error("OnForbidden: " + context.Request + " " + context.Response);
@@ -102,19 +79,16 @@ namespace Utils.Other
                 };
 
                 string metadataurl = cfgmgr["auth:metadata"];
-                if (IsWebPageAvailable(metadataurl))
+                if (Functions.IsWebPageAvailable(metadataurl))
                 {
-                    x.MetadataAddress = cfgmgr["auth:metadata"]; //.../.well-known/openid-configuration URL aus config ... Die Datei enthält Infos für die Auth. der Token
+                    x.MetadataAddress = metadataurl;
 
-                    x.Audience = cfgmgr["auth:clientid"]; // microsoft:identityserver:<CLIENT ID FÜR APP IM ADFS>
-                    x.Authority = cfgmgr["auth:authority"]; // Url / Referer unter dem der Client läuft
-                    
-                    // UM SSL Zertifikatstest der Backends untereinander zu deaktivieren... sonst müsste man hier valide SSL Zertifikate installieren etc...
+                    x.Audience = cfgmgr["auth:clientid"];
+
                     HttpClientHandler handler = new HttpClientHandler();
                     handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
                     x.BackchannelHttpHandler = handler;
 
-                    //Einstellung welche Dinge im Token geprüft werden:
                     x.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidAudience = cfgmgr["auth:audience"],
@@ -137,32 +111,9 @@ namespace Utils.Other
                 {
                     log.Error("Die OpenID Connect Metadaten konnten nicht geladen werden, Token können nicht validiert werden. (URL: " + metadataurl + ")");
                 }
-
-               
             })
             .AddCookie();
-        }
-
-        public static bool IsWebPageAvailable(string url)
-        {
-            try
-            {
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-                request.Method = "GET";
-                request.Timeout = 5000;
-                request.AllowAutoRedirect = true;
-                request.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-
-                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-                {
-                    return response.StatusCode == HttpStatusCode.OK;
-                }
-            }
-            catch (Exception e)
-            {
-                log.Error("IsWebPageAvailable() url: " + url, e);
-                return false;
-            }
+            
         }
 
         public static void configureRateLimit(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
@@ -176,19 +127,21 @@ namespace Utils.Other
 
         }
 
-        public static void configureBuilder(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
+        public static void configureBuilder(WebApplicationBuilder builder, ConfigurationManager cfgmgr, ConfigService config)
         {
+            builder.Services.AddSingleton<ConfigService>(o => config);
+            builder.Services.AddSingleton<DatabaseService>(o => new DatabaseService(config));
 
             configureCors(builder, cfgmgr);
             configureAuthorization(builder, cfgmgr);
             configureRateLimit(builder, cfgmgr);
 
             builder.Services.AddDistributedMemoryCache();
-            builder.Services.AddSession(options => {
+            builder.Services.AddSession(options =>
+            {
                 options.IdleTimeout = TimeSpan.FromMinutes(1);
             });
 
-            //builder.Services.AddControllers();
             builder.Services.AddControllersWithViews().AddXmlSerializerFormatters();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddRazorPages();
@@ -196,13 +149,14 @@ namespace Utils.Other
 
         public static void configureApp(WebApplication app)
         {
-         
             app.UseMiddleware<CustomIpRateLimitMiddleware>();
+
             app.UseDeveloperExceptionPage();
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseRouting();
             app.UseCookiePolicy();
+
             app.UseSession();
             app.UseAuthorization();
             app.UseAuthentication();
@@ -212,24 +166,17 @@ namespace Utils.Other
         }
     }
 
-    //Nötig, nicht löschen!
     public class IsEnabledRequirement : IAuthorizationRequirement
     {
     }
 
-    
-
-
-    /*
-       Dient der Möglichkeit die Authorisierung per Konfigurationsdatei zu (de-)aktivieren.
-    */
     public class CustomAuthHandler : AuthorizationHandler<IsEnabledRequirement>
     {
 
         private bool _disabled;
         public CustomAuthHandler(bool authDisabled)
         {
-            this._disabled = authDisabled; 
+            this._disabled = authDisabled;
         }
 
         public override Task HandleAsync(AuthorizationHandlerContext context)
