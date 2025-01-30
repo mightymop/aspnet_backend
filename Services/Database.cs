@@ -124,13 +124,63 @@ namespace fahrtenbuch_service.Services
                             object result = null;
                             using (IDataReader reader = cmd.ExecuteReader())
                             {
-                                if (reader.Read())
+                                while (reader.Read())
                                 {
                                     result = readData(reader);
                                 }
                             }
                             connection.Close();
                             return result;
+                        }
+                    }
+                };
+
+                error = null;
+                if (_config.isSql_Windows_Auth_Write())
+                {
+                    return WindowsIdentity.RunImpersonated(getUserHandle(false), fkt);
+                }
+                else
+                {
+                    return fkt();
+                }
+            }
+            catch (Exception e)
+            {
+                string method = new StackTrace(new StackFrame(1)).GetFrame(0)!.GetMethod()!.Name;
+                string classname = this.GetType().BaseType!.Name;
+                log.Error(classname + "." + method + ": " + e.Message, e);
+                error = e.Message;
+                return null;
+            }
+        }
+
+        public object[] getAllData(out string error)
+        {
+
+            try
+            {
+                var fkt = () =>
+                {
+                    using (SqlConnection connection = openConnection())
+                    {
+                        string sql = "SELECT tab_data.id, tab_data.data FROM " + this._config.getSQLDatabaseWrite() + ".dbo.tab_data";
+
+                        log.Info(sql);
+
+                        using (SqlCommand cmd = new SqlCommand(sql, connection))
+                        {
+                           
+                            ArrayList result = new ArrayList();
+                            using (IDataReader reader = cmd.ExecuteReader())
+                            {
+                                while (reader.Read())
+                                {
+                                    result.Add(readData(reader));
+                                }
+                            }
+                            connection.Close();
+                            return result.ToArray();
                         }
                     }
                 };

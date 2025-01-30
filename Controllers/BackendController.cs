@@ -88,6 +88,50 @@ namespace aspauthtest.Controllers
             }
         }
 
+        [HttpGet("/test/list")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [Produces("application/json")]
+        [EnableCors]
+        public ActionResult<ApiInfo> list()
+        {
+            try
+            {
+                string error;
+              
+                object[] data = _db.getAllData( out error);
+
+                if (data != null && error == null)
+                {
+                    return Ok(data);
+                }
+                else
+                {
+                    if (error == null)
+                    {
+                        return NotFound("Nix nicht gefunden!");
+                    }
+                    else
+                    {
+                        return Problem(
+                            detail: error,
+                            statusCode: StatusCodes.Status500InternalServerError
+                        );
+                    }
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                log.Error(ex.Message);
+                return Problem(
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status500InternalServerError
+                );
+            }
+        }
+
         [HttpPost("/test/insert")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [EnableCors]
