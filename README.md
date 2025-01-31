@@ -35,10 +35,22 @@ Die Anwendung ist unter den `Default Web Sites` mittels `Add Application` zu hin
 ```
 
 ### Datenbank
+Mit dem SQL Server Management Studio ist der Server `map-miktsql-t-v` anzusteuern. Dort kann die Datenbank neu angelegt werden.
+Unter `Datenbank/Security` ist der Server-user zu erstellen. Der User erhält dabei folgende Rechte:
+```json
+{
+    "read"     : true,
+    "write"    : true,
+    "owner"    : true
+}
+```
+
+Dieser kann dann unter `Security/Login` der Datenbank hinzugefügt werden. Mit diesem User erfolgt dann die Authentifizierung.
+Die `appsettings.json` ist mit den aktualisierten Daten der Datenbank zu aktualisieren.
 
 ## Swagger
-`https://polosk-lb.int.polizei.berlin.de/test_service/swagger/index.html`
-
+Sind alle Einstellungen an Server, Datenbank und Projekt vorgenommen, ist dieses neu zu veröffentlichen.
+Swagger sollte dann unter der Adresse [Swagger](https://posk-lb.int.p.b.de/test_service/swagger/index.html) erreichbar sein.
 
 ## Ramons
 
