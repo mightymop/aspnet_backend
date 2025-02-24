@@ -13,12 +13,12 @@ ConfigurationManager cfgmgr = builder.Configuration;
 ConfigService config = new ConfigService(cfgmgr);
 IdentityModelEventSource.ShowPII = true;
 
-SwaggerExtensions.ConfigureSwaggerBuilder(builder, cfgmgr);
+SwaggerExtensions.ConfigureSwaggerBuilder(builder, config);
 ConfigurationHelper.configureBuilder(builder, cfgmgr, config);
 
 var app = builder.Build();
 
-SwaggerExtensions.ConfigureSwaggerApp(app, cfgmgr);
+SwaggerExtensions.ConfigureSwaggerApp(app, config);
 ConfigurationHelper.configureApp(app);
 
 app.Run();

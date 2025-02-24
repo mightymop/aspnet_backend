@@ -11,27 +11,36 @@ namespace Utils.Other
     public static class ConfigurationHelper
     {
         private static ILog log = LogManager.GetLogger(typeof(ConfigurationHelper));
-        private static void configureCors(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
+        private static void configureCors(WebApplicationBuilder builder, ConfigService config)
         {
+            var allowedOrigins = config.getCorsOrigins() ?? new string[] { "*" };
+
             builder.Services.AddCors(options =>
             {
                 options.AddDefaultPolicy(policy =>
                 {
-                    policy.WithOrigins("*", "https://localhost/");
-                    policy.SetIsOriginAllowed(origin => true);
-                    policy.AllowAnyOrigin();
-                    policy.AllowAnyHeader();
-                    policy.WithMethods("GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH", "HEAD");
-                    // policy.AllowAnyMethod();
+                    policy.WithOrigins(allowedOrigins)
+                     .AllowAnyHeader()
+                     .WithMethods("GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH", "HEAD")
+                     .SetPreflightMaxAge(TimeSpan.FromSeconds(3600));
+                    // Falls Credentials verwendet werden, darfst du keine AllowAnyOrigin verwenden
+                    // und musst zudem AllowCredentials explizit setzen:
                     policy.SetIsOriginAllowedToAllowWildcardSubdomains();
-                    policy.SetPreflightMaxAge(TimeSpan.FromSeconds(3600));
+                    if (allowedOrigins[0].Equals("*") == false)
+                    {
+                        policy.AllowCredentials();
+                    }
+                    else
+                    {
+                        policy.AllowAnyOrigin();
+                    }
                 });
             });
         }
 
-        private static void configureAuthorization(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
+        private static void configureAuthorization(WebApplicationBuilder builder, ConfigService config)
         {
-            builder.Services.AddSingleton<IAuthorizationHandler>(o => new CustomAuthHandler(cfgmgr["auth:enabled"] != null ? !cfgmgr["auth:enabled"].Equals("true") : true));
+            builder.Services.AddSingleton<IAuthorizationHandler>(o => new CustomAuthHandler(config.isAuthEnabled()));
 
             builder.Services.Configure<IISOptions>(iis =>
             {
@@ -78,12 +87,12 @@ namespace Utils.Other
                     }
                 };
 
-                string metadataurl = cfgmgr["auth:metadata"];
+                string metadataurl = config.getAuthMetadata();
                 if (Functions.IsWebPageAvailable(metadataurl))
                 {
                     x.MetadataAddress = metadataurl;
 
-                    x.Audience = cfgmgr["auth:clientid"];
+                    x.Audience = config.getAuthAudience();
 
                     HttpClientHandler handler = new HttpClientHandler();
                     handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
@@ -91,19 +100,19 @@ namespace Utils.Other
 
                     x.TokenValidationParameters = new TokenValidationParameters
                     {
-                        ValidAudience = cfgmgr["auth:audience"],
+                        ValidAudience = config.getAuthAudience(),
 
                         ValidateLifetime = true,
                         RequireExpirationTime = true,
                         ClockSkew = TimeSpan.FromMinutes(2),
                         ValidateIssuer = false,
-                        RequireSignedTokens = Convert.ToBoolean(cfgmgr["auth:validate_sign"]),
-                        RequireAudience = Convert.ToBoolean(cfgmgr["auth:validate_audience"]),
+                        RequireSignedTokens = Convert.ToBoolean(config.isAuthValidateSignEnabled()),
+                        RequireAudience = Convert.ToBoolean(config.isAuthValidateAudienceEnabled()),
                         // SaveSigninToken = true,
-                        TryAllIssuerSigningKeys = Convert.ToBoolean(cfgmgr["auth:validate_sign"]),
+                        TryAllIssuerSigningKeys = config.isAuthValidateSignEnabled(),
                         ValidateActor = false,
-                        ValidateAudience = Convert.ToBoolean(cfgmgr["auth:validate_audience"]),
-                        ValidateIssuerSigningKey = Convert.ToBoolean(cfgmgr["auth:validate_sign"]),
+                        ValidateAudience = config.isAuthValidateAudienceEnabled(),
+                        ValidateIssuerSigningKey = config.isAuthValidateSignEnabled(),
                         ValidateTokenReplay = false
                     };
                 }
@@ -132,8 +141,8 @@ namespace Utils.Other
             builder.Services.AddSingleton<ConfigService>(o => config);
             builder.Services.AddSingleton<DatabaseService>(o => new DatabaseService(config));
 
-            configureCors(builder, cfgmgr);
-            configureAuthorization(builder, cfgmgr);
+            configureCors(builder, config);
+            configureAuthorization(builder, config);
             configureRateLimit(builder, cfgmgr);
 
             builder.Services.AddDistributedMemoryCache();

@@ -1,32 +1,33 @@
-﻿using Microsoft.OpenApi.Models;
+﻿using fahrtenbuch_service.Services;
+using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace Utils.Other
 {
     public static class SwaggerExtensions
     {
-        public static void ConfigureSwaggerBuilder(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
+        public static void ConfigureSwaggerBuilder(WebApplicationBuilder builder, ConfigService config)
         {
             builder.Services.AddSwaggerGen(c =>
             {
-                c.SwaggerDoc(cfgmgr["api:version"], new OpenApiInfo { Title = cfgmgr["api:name"], Version = cfgmgr["api:version"] });
-                c.AddOauth2AuthSchemaSecurityDefinitions(cfgmgr);
+                c.SwaggerDoc(config.get("api:version"), new OpenApiInfo { Title = config.get("api:name"), Version = config.get("api:version")});
+                c.AddOauth2AuthSchemaSecurityDefinitions(config);
             }).AddSwaggerGenNewtonsoftSupport();
         }
 
-        public static void ConfigureSwaggerApp(WebApplication app, ConfigurationManager cfgmgr)
+        public static void ConfigureSwaggerApp(WebApplication app, ConfigService config)
         {
             app.UseSwagger();
             app.UseSwaggerUI(c =>
             {
                 string swaggerJsonBasePath = string.IsNullOrWhiteSpace(c.RoutePrefix) ? "." : "..";
-                c.SwaggerEndpoint($"{swaggerJsonBasePath}/swagger/"+ cfgmgr["api:version"] +"/swagger.json", cfgmgr["api:name"] + " " + cfgmgr["api:version"]);
+                c.SwaggerEndpoint($"{swaggerJsonBasePath}/swagger/"+ config.get("api:version") +"/swagger.json", config.get("api:name") + " " + config.get("api:version"));
 
                 //oauth2
 
-                c.OAuthClientId(cfgmgr["auth:clientid"]);
+                c.OAuthClientId(config.get("auth:clientid"));
                 c.OAuthUsePkce();
-                c.OAuthAppName(cfgmgr["api:name"]);
+                c.OAuthAppName(config.get("api:name"));
                 c.OAuthScopeSeparator(" ");
                 c.OAuthUseBasicAuthenticationWithAccessCodeGrant();
 
@@ -34,7 +35,7 @@ namespace Utils.Other
             
         }
 
-        public static SwaggerGenOptions AddOauth2AuthSchemaSecurityDefinitions(this SwaggerGenOptions options, ConfigurationManager cfgmgr)
+        public static SwaggerGenOptions AddOauth2AuthSchemaSecurityDefinitions(this SwaggerGenOptions options, ConfigService config)
         {
             options.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
             {
@@ -45,8 +46,8 @@ namespace Utils.Other
                 {
                     AuthorizationCode = new OpenApiOAuthFlow()
                     {
-                        AuthorizationUrl = new Uri(cfgmgr["auth:authorizeurl"]), 
-                        TokenUrl = new Uri(cfgmgr["auth:tokenurl"]),
+                        AuthorizationUrl = new Uri(config.getAuthorizeUrl()), 
+                        TokenUrl = new Uri(config.getTokenUrl()),
                         Scopes = new Dictionary<string, string>
                         {
                              { "openid", "Use Openid Connect" }
