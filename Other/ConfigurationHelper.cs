@@ -182,15 +182,15 @@ namespace Utils.Other
     public class CustomAuthHandler : AuthorizationHandler<IsEnabledRequirement>
     {
 
-        private bool _disabled;
-        public CustomAuthHandler(bool authDisabled)
+        private bool _enabled;
+        public CustomAuthHandler(bool authEnabled)
         {
-            this._disabled = authDisabled;
+            this._enabled = authEnabled;
         }
 
         public override Task HandleAsync(AuthorizationHandlerContext context)
         {
-            if (this._disabled)
+            if (!this._enabled)
             {
                 foreach (IAuthorizationRequirement itm in context.Requirements)
                 {
@@ -205,7 +205,7 @@ namespace Utils.Other
         protected override Task HandleRequirementAsync(AuthorizationHandlerContext context,
                                                        IsEnabledRequirement requirement)
         {
-            if (this._disabled)
+            if (!this._enabled)
             {
                 context.Succeed(requirement);
             }
