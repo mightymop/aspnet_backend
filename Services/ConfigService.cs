@@ -52,7 +52,6 @@ namespace fahrtenbuch_service.Services
             _auth_client_id = _cmgr.GetSection("auth").GetSection("clientid").Value; ;
             _auth_audience = _cmgr.GetSection("auth").GetSection("audience").Value; ;
             _auth_meta_url = _cmgr.GetSection("auth").GetSection("metadata").Value; ;
-
             _authMetadata = loadAuthMeta(_auth_meta_url);
 
         }
