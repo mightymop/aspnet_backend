@@ -1,6 +1,14 @@
 # Backend
 
 ## Use
+### Schnell-Check
+- [x] Server antesten: `map-polueb-1-v`, `map-polueb-2-v`,
+- [x] IIS des Servers testen,
+- [x] IIS Features installieren,
+- [x] `dotnet-hosting-6.0.36` hinzufügen,
+- [ ] Test-Service einspielen und testen,
+
+
 ### Starten
 Starten der Anwendung in Vistual Studio über die Datei `aspauthtest.sln`.
 
