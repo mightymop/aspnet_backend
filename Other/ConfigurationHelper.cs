@@ -97,7 +97,7 @@ namespace Utils.Other
                     HttpClientHandler handler = new HttpClientHandler();
                     handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
                     x.BackchannelHttpHandler = handler;
-
+                    x.RequireHttpsMetadata = false;
                     x.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidAudience = config.getAuthAudience(),
