@@ -21,15 +21,8 @@ namespace fahrtenbuch_service.Services
 
         private string[] _cors_origins;
 
-        private bool _auth_enabled = false;
-        private bool _auth_validate_audience = false;
-        private bool _auth_validate_sign = false;
-        private string _auth_meta_url = null;
-        private string _auth_client_id = null;
-        private string _auth_audience = null;
-
         private JToken _authMetadata;
-
+        private string[] _auth_meta_urls;
 
         public ConfigService(ConfigurationManager cmgr)
         {
@@ -46,13 +39,8 @@ namespace fahrtenbuch_service.Services
             _cors_origins = _cmgr.GetSection("cors").GetSection("origins").Get<string[]>();
             _debug = _cmgr.GetSection("debug").Get<bool>();
 
-            _auth_enabled = _cmgr.GetSection("auth").GetSection("enabled").Get<bool>();
-            _auth_validate_audience = _cmgr.GetSection("auth").GetSection("validate_audience").Get<bool>();
-            _auth_validate_sign = _cmgr.GetSection("auth").GetSection("validate_sign").Get<bool>();
-            _auth_client_id = _cmgr.GetSection("auth").GetSection("clientid").Value; ;
-            _auth_audience = _cmgr.GetSection("auth").GetSection("audience").Value; ;
-            _auth_meta_url = _cmgr.GetSection("auth").GetSection("metadata").Value; ;
-            _authMetadata = loadAuthMeta(_auth_meta_url);
+            _auth_meta_urls = _cmgr.GetSection("auth").GetSection("metadata").Get<string[]>();
+            _authMetadata = loadAuthMeta(_auth_meta_urls[0]);
 
         }
 
@@ -60,7 +48,7 @@ namespace fahrtenbuch_service.Services
         {
             if (_authMetadata == null)
             {
-                _authMetadata = loadAuthMeta(_auth_meta_url);
+                _authMetadata = loadAuthMeta(_auth_meta_urls[0]);
             }
 
             if (_authMetadata == null)
@@ -73,7 +61,7 @@ namespace fahrtenbuch_service.Services
         {
             if (_authMetadata==null)
             {
-                _authMetadata = loadAuthMeta(_auth_meta_url);
+                _authMetadata = loadAuthMeta(_auth_meta_urls[0]);
             }
 
             if (_authMetadata == null)
@@ -101,36 +89,6 @@ namespace fahrtenbuch_service.Services
                 log.Error($"Fehler beim Laden des JSON: {ex.Message}");
                 return null;
             }
-        }
-
-        public string getAuthMetadata ()
-        {
-            return _auth_meta_url;
-        }
-
-        public string getAuthClientID()
-        {
-            return _auth_client_id;
-        }
-
-        public string getAuthAudience()
-        {
-            return _auth_audience;
-        }
-
-        public bool isAuthValidateAudienceEnabled()
-        {
-            return _auth_validate_audience;
-        }
-
-        public bool isAuthValidateSignEnabled()
-        {
-            return _auth_validate_sign;
-        }
-
-        public bool isAuthEnabled()
-        {
-            return _auth_enabled;
         }
 
         public string[] getCorsOrigins()

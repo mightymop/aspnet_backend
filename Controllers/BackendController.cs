@@ -89,7 +89,7 @@ namespace aspauthtest.Controllers
             }
         }
 
-        [HttpPatch("/test/insert")]
+        [HttpPost("/test/insert")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [EnableCors]
         [ProducesResponseType(StatusCodes.Status200OK)]

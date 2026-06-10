@@ -1,10 +1,13 @@
 ﻿using AspNetCoreRateLimit;
+using fahrtenbuch_service.Other;
+using fahrtenbuch_service.Services;
 using log4net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
-using fahrtenbuch_service.Other;
-using fahrtenbuch_service.Services;
+using System.Reflection;
+using System.Text.Json;
 
 namespace Utils.Other
 {
@@ -38,9 +41,10 @@ namespace Utils.Other
             });
         }
 
-        private static void configureAuthorization(WebApplicationBuilder builder, ConfigService config)
+        private static void configureAuthorization(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
         {
-            builder.Services.AddSingleton<IAuthorizationHandler>(o => new CustomAuthHandler(config.isAuthEnabled()));
+            builder.Services.AddSingleton<IAuthorizationHandler>(
+                o => new CustomAuthHandler(cfgmgr.GetSection("auth").GetSection("enabled").Get<bool>()));
 
             builder.Services.Configure<IISOptions>(iis =>
             {
@@ -50,12 +54,15 @@ namespace Utils.Other
 
             builder.Services.Configure<CookiePolicyOptions>(options =>
             {
-                // This lambda determines whether user consent for non-essential cookies is needed for a given request.
                 options.CheckConsentNeeded = context => true;
                 options.MinimumSameSitePolicy = SameSiteMode.None;
             });
 
-           
+            builder.Services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo(Directory.GetCurrentDirectory()))
+                .SetApplicationName(
+                    Assembly.GetEntryAssembly()?.GetName().Name ?? "DefaultAppName");
+
             builder.Services.AddAuthorization(options =>
             {
                 options.AddPolicy("CustomAuth", policy =>
@@ -63,6 +70,115 @@ namespace Utils.Other
                     policy.AddRequirements(new IsEnabledRequirement());
                 });
             });
+
+            // ====================================================
+            // Metadata VOR AddJwtBearer laden
+            // ====================================================
+
+            var metadataUrls = cfgmgr.GetSection("auth").GetSection("metadata").Get<string[]>();
+
+            List<string> validIssuers = new();
+            List<SecurityKey> signingKeys = new();
+
+            HttpClientHandler handler = new HttpClientHandler();
+            handler.ServerCertificateCustomValidationCallback =
+                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+
+            using HttpClient httpClient = new HttpClient(handler);
+
+            foreach (var metadataUrl in metadataUrls)
+            {
+                try
+                {
+                    if (!Functions.IsWebPageAvailable(metadataUrl))
+                    {
+                        log.Error($"Metadata nicht erreichbar: {metadataUrl}");
+                        continue;
+                    }
+
+                    // issuer direkt aus JSON lesen
+                    string metadataJson =
+                        httpClient.GetStringAsync(metadataUrl)
+                            .GetAwaiter()
+                            .GetResult();
+
+                    using JsonDocument doc = JsonDocument.Parse(metadataJson);
+
+                    if (doc.RootElement.TryGetProperty("issuer", out var issuerProperty))
+                    {
+                        string issuer = issuerProperty.GetString();
+
+                        if (!string.IsNullOrWhiteSpace(issuer))
+                        {
+                            validIssuers.Add(issuer);
+
+                            log.Info(
+                                $"Issuer aus OpenID Metadata geladen: {issuer}");
+                        }
+                    }
+                    else
+                    {
+                        log.Error(
+                            $"Metadata enthält kein issuer-Feld: {metadataUrl}");
+                    }
+
+                    if (doc.RootElement.TryGetProperty("access_token_issuer", out var access_token_issuerProperty))
+                    {
+                        string access_token_issuer = access_token_issuerProperty.GetString();
+
+                        if (!string.IsNullOrWhiteSpace(access_token_issuer))
+                        {
+                            validIssuers.Add(access_token_issuer);
+
+                            log.Info(
+                                $"Access_token_issuer aus OpenID Metadata geladen: {access_token_issuer}");
+                        }
+                    }
+                    else
+                    {
+                        log.Error(
+                            $"Metadata enthält kein access_token_issuer-Feld: {metadataUrl}");
+                    }
+
+                    // Keys weiterhin über OIDC laden
+                    var manager =
+                        new Microsoft.IdentityModel.Protocols.ConfigurationManager<
+                            Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectConfiguration>(
+                            metadataUrl,
+                            new Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectConfigurationRetriever()
+                        );
+
+                    var oidcConfig =
+                        manager.GetConfigurationAsync()
+                            .GetAwaiter()
+                            .GetResult();
+
+                    foreach (var key in oidcConfig.SigningKeys)
+                    {
+                        signingKeys.Add(key);
+                    }
+
+                    log.Info($"OIDC Issuer Property: {oidcConfig.Issuer}");
+                    log.Info($"Signing Keys geladen: {oidcConfig.SigningKeys.Count}");
+                }
+                catch (Exception ex)
+                {
+                    log.Error(
+                        $"Fehler beim Laden der Metadata: {metadataUrl}",
+                        ex);
+                }
+            }
+
+            log.Info("ValidIssuers:");
+
+            foreach (var issuer in validIssuers)
+            {
+                log.Info($"  {issuer}");
+            }
+
+            // ====================================================
+            // Authentication
+            // ====================================================
 
             builder.Services.AddAuthentication(sharedOptions =>
             {
@@ -75,54 +191,53 @@ namespace Utils.Other
             {
                 x.Events = new JwtBearerEvents()
                 {
-                    OnAuthenticationFailed = (context) =>
+                    OnAuthenticationFailed = context =>
                     {
                         log.Error("Authentication failed.", context.Exception);
                         return Task.CompletedTask;
                     },
+
                     OnForbidden = context =>
                     {
-                        log.Error("OnForbidden: " + context.Request + " " + context.Response);
+                        log.Error(
+                            "OnForbidden: " +
+                            context.Request +
+                            " " +
+                            context.Response);
+
                         return Task.CompletedTask;
                     }
                 };
 
-                string metadataurl = config.getAuthMetadata();
-                if (Functions.IsWebPageAvailable(metadataurl))
+                x.BackchannelHttpHandler = handler;
+                x.RequireHttpsMetadata = false;
+
+                x.TokenValidationParameters = new TokenValidationParameters
                 {
-                    x.MetadataAddress = metadataurl;
+                    ValidIssuers = validIssuers,
 
-                    x.Audience = config.getAuthAudience();
+                    IssuerSigningKeys = signingKeys,
 
-                    HttpClientHandler handler = new HttpClientHandler();
-                    handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-                    x.BackchannelHttpHandler = handler;
-                    x.RequireHttpsMetadata = false;
-                    x.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidAudience = config.getAuthAudience(),
+                    ValidAudiences = cfgmgr.GetSection("auth:audience").Get<string[]>(),
 
-                        ValidateLifetime = true,
-                        RequireExpirationTime = true,
-                        ClockSkew = TimeSpan.FromMinutes(2),
-                        ValidateIssuer = false,
-                        RequireSignedTokens = Convert.ToBoolean(config.isAuthValidateSignEnabled()),
-                        RequireAudience = Convert.ToBoolean(config.isAuthValidateAudienceEnabled()),
-                        // SaveSigninToken = true,
-                        TryAllIssuerSigningKeys = config.isAuthValidateSignEnabled(),
-                        ValidateActor = false,
-                        ValidateAudience = config.isAuthValidateAudienceEnabled(),
-                        ValidateIssuerSigningKey = config.isAuthValidateSignEnabled(),
-                        ValidateTokenReplay = false
-                    };
-                }
-                else
-                {
-                    log.Error("Die OpenID Connect Metadaten konnten nicht geladen werden, Token können nicht validiert werden. (URL: " + metadataurl + ")");
-                }
+                    ValidateLifetime = true,
+                    RequireExpirationTime = true,
+                    ClockSkew = TimeSpan.FromMinutes(2),
+
+                    ValidateIssuer = cfgmgr.GetSection("auth").GetSection("validate_issuer").Get<bool>(),
+
+                    RequireSignedTokens = cfgmgr.GetSection("auth").GetSection("validate_sign").Get<bool>(),
+                    RequireAudience = cfgmgr.GetSection("auth").GetSection("validate_audience").Get<bool>(),
+                    ValidateAudience = cfgmgr.GetSection("auth").GetSection("validate_audience").Get<bool>(),
+                    ValidateIssuerSigningKey = cfgmgr.GetSection("auth").GetSection("validate_sign").Get<bool>(),
+
+                    TryAllIssuerSigningKeys = cfgmgr.GetSection("auth").GetSection("validate_sign").Get<bool>(),
+
+                    ValidateActor = false,
+                    ValidateTokenReplay = false
+                };
             })
             .AddCookie();
-            
         }
 
         public static void configureRateLimit(WebApplicationBuilder builder, ConfigurationManager cfgmgr)
@@ -142,7 +257,7 @@ namespace Utils.Other
             builder.Services.AddSingleton<DatabaseService>(o => new DatabaseService(config));
 
             configureCors(builder, config);
-            configureAuthorization(builder, config);
+            configureAuthorization(builder, cfgmgr);
             configureRateLimit(builder, cfgmgr);
 
             builder.Services.AddDistributedMemoryCache();
