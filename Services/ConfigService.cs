@@ -91,6 +91,11 @@ namespace fahrtenbuch_service.Services
             }
         }
 
+        public string getFirst(string val)
+        {
+            return _cmgr.GetSection(val).Get<string[]>()[0];
+        }
+
         public string[] getCorsOrigins()
         {
             return _cors_origins;

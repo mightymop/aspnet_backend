@@ -25,7 +25,7 @@ namespace Utils.Other
 
                 //oauth2
 
-                c.OAuthClientId(config.get("auth:clientid"));
+                c.OAuthClientId(config.getFirst("auth:clientid"));
                 c.OAuthUsePkce();
                 c.OAuthAppName(config.get("api:name"));
                 c.OAuthScopeSeparator(" ");
